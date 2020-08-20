@@ -5,3 +5,11 @@ output: html_notebook
 
 This paper summarizes data of Covid19 (SARS-Cov2).
 
+bullets:
+corona deaths 
+sentinel
+cases, ratio etc
+hospital beds
+pcr-test-statistics
+
+comparison different countries
