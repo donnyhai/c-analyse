@@ -1,0 +1,945 @@
+---
+title: "default"
+author: "default"
+date: "default"
+output: 
+  html_document:
+    fig_caption: yes
+    toc: yes
+    toc_depth: '2'
+    number_sections: true
+  html_notebook:
+    fig_caption: yes
+    toc: yes
+    toc_depth: 2
+    toc_float: true
+    collapsed: false
+    smooth_scroll: false
+    number_sections: true
+    theme: default
+    highlight: tango
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r package imports, include=FALSE}
+library("tidyverse")
+library("lubridate")
+library("kableExtra")
+```
+
+```{r constants declaration, include=FALSE}
+DATA_DIR <- "datasets/final-datasets/"
+```
+
+# Introduction
+This report documents the observations of user behaviour change caused by the implementation of nudges in the onboarding interaction between an user and the sports app DEFAULT. Two type of nudges were implemented in this experiment, leading to different onboarding user experiences. The aim of implementing the nudges is to increase user activity in the app. 
+
+Starting the app for the first time after registering, every user finds himself on both the following pages. First the **basicProfileOnboardingScreen**, then the **sportSpecificOnboardingScreen**. On the *basicProfileOnboardingScreen* an user enters personal information about physical aspects as age, gender, body height and weight, and on the *sportSpecificOnboardingScreen* an user provides information about his training motivation, his training barriers and the level of training intensity this user is looking for. 
+
+![*basicProfileOnboardingScreen (left), sportSpecificOnboardingScreen (right)*](figures/standard-data.png)
+
+For this experiment two other pages are introduced to the onboarding process, the **onboardingSummaryPage** and the **tellAFriendPage**, defining a **personalization resp. commitment nudge**. On the *onboardingSummaryPage* an user encounters an individual workout summary which was setup for him according to the information the user was entering in the first two pages described above. It shall have the aim to personalize the app for the user and therefore give a feeling of individual importance right in the beginning of using the app. On the *tellAFriendPage* an user has the free opportunity to share his fitness plans to a friend and therefore commit himself softly to his training plans in the app. 
+
+![*onboardingSummaryPage (personalization nudge) (left), tellAFriendPage (commitment nudge) (right)*](figures/nudges-pages.png)
+
+Another possible onboarding nudge is the **combination of both nudges** described above. In this onboarding experience an user will first come to the personalization and then to the commitment page. 
+
+![*nudge combination*](figures/grafik-onboarding-flow.png)
+
+We can summarize all the different onboarding paths an user can be assigned to by the following diagramm. The numbers on the connecting arrows describe sensorIds, identifying sensors which track the respective user movement from one page to another. 
+
+![*onboarding diagramm*](figures/onboardingPath.png)
+
+After having seen nudge pages every user finishes the onboarding by coming to the overview page. Users who finish the onboarding by coming to the overview page without having experienced any of the nudge pages will be part of the **control** group in this analysis. 
+
+In this experiment all users shall be directed to the different pages uniformly distributed to get group sizes which we can confidently compare. This means 
+that every of the four paths 
+
+- control (66 - 67) 
+- personalization (66 - 68 - 89) 
+- commitment (66 - 70 - 71/72) 
+- combination of personalization and commitment (66 - 68 - 73 - 71/72)
+
+shall be assigned randomly and by equal possibility for any user. 
+
+We will check this random assignment of onboarding experience and validate other aspects of the data in the following chapter. After this data validation and preprocessing we will have a look on important user activity dimensions and see whether we can find significant user behaviour change caused by the implementation of the above described nudges compared to the control experience. 
+
+# Preprocessing
+
+## Data Import
+
+Here we import the data. We assign the dataframe `profiles` which contains all profiles. We will use this dataframe often in this report. 
+
+```{r data import}
+source("utilities/loadBehaviorLogs.R")
+behaviorLogs <- loadBehaviorLogs(DATA_DIR)
+
+profiles <- read.csv("datasets/final-datasets/userProfiles.csv",
+                            header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r proprocess profiles, include=FALSE}
+profiles <- profiles %>% 
+  select(-X) %>% 
+  mutate(gender = as.factor(gender), createdDate = as.Date(createdDate)) %>% 
+  rename(registrationDate = createdDate)
+
+#Add onboarding date to profiles
+#create onboarding dates for all users in doOnboardingLogs
+onboardingDates <- behaviorLogs$doOnboardingLogs %>% 
+  filter(interaction=="start") %>%
+  group_by(userId) %>%
+  mutate(onboardingDate = min(date)) %>%
+  ungroup() %>%
+  distinct(userId, .keep_all=T) %>%
+  select(userId,onboardingDate)
+
+#Join with profiles 
+profiles <- profiles %>% 
+  left_join(onboardingDates, by = "userId")
+
+rm(loadBehaviorLogs, onboardingDates)
+```
+
+For now we preprocess it and add for each user the value `onboardingDate`.
+
+## Validation of Base Datasets
+
+The base datasets are the three datasets `navigateLogs`, `doOnboardingLogs` and `profiles`. Respectively, they contain all existent navigation logs, onboarding logs like `start` and `complete` and the collection of all existent profiles. In this section we will validate some aspects of these datasets as the existence of profiles for each user, the complete existence of navigation logs in the onboarding process and others. 
+
+```{r assign base data sets, include=FALSE}
+navigateLogs <- behaviorLogs$navigateLogs
+
+users.registered <- profiles$user
+users.withNavigateLogs <- unique(navigateLogs$userId)
+```
+
+### Existence of User Profiles
+We found that for all users that exist in the navigation logs, which assumingly correspond to all users existing in the behaviorlogs, a user profile exists.
+
+```{r users without profiles, include=FALSE}
+length(users.withNavigateLogs[!is.element(users.withNavigateLogs, users.registered)])
+```
+
+### Consistency of Navigation Logs in Onboarding
+We found that a considerable number of users display an inconsistent navigation pattern in the onboarding.
+That is, according to the navigation logs, these users haven't completed the onboarding process. 
+Yet, there exist logs from app contexts that can only be reached after completing the onboarding for said users.
+
+```{r consistent/inconsistent onboarding, include=FALSE}
+source("utilities/userFunctions.R")
+
+# Union of the subsequent user sets equals all users
+users.withConsistentOnboarding <- users.withNavigateLogs[sapply(users.withNavigateLogs,
+                                                                hasConsistentOnboarding)]
+
+users.withInconsistentOnboarding <- users.withNavigateLogs[!is.element(users.withNavigateLogs,
+                                                                       users.withConsistentOnboarding)]
+
+# Union of the subsequent user sets equals all users with consistent onboarding
+users.completedOnboarding <- users.withConsistentOnboarding[sapply(users.withConsistentOnboarding,
+                                                                   completedOnboarding)]
+
+users.quitOnboarding <- users.withConsistentOnboarding[!is.element(users.withConsistentOnboarding,
+                                                                   users.completedOnboarding)]
+```
+
+This contradiction can be explained by a malfunction of the logging implementation within the onboarding process.
+As a consequence of this data loss, we cannot assign a specific treatment group but believe that they have received some treatment.
+We will mark these inconsistent users at the end of this section to be able to treat them in a special way during analysis.
+
+```{r remove users with incosistent onboarding, eval=FALSE, include=FALSE}
+profiles <- profiles[is.element(users.registered,users.completedOnboarding),]
+```
+
+The following table summarizes the exploration and validation process of the navigation logs from the onboarding process.
+
+```{r overview, echo=FALSE}
+data.frame(users=c("All observed users",
+                         "Users that completed the onboarding",
+                         "Users that quit the onboarding",
+                         "Users with missing onboarding data"),
+           size=c(length(users.withNavigateLogs),
+                  length(users.completedOnboarding),
+                  length(users.quitOnboarding),
+                  length(users.withInconsistentOnboarding))) %>%
+  kable() %>% kable_styling("striped")
+```
+
+In the `profiles` table, we will add a new column `onboardingState` to distinguish these user groups and discard all users from the table for whom no navigation data is available at all.
+
+```{r add onboardingState, echo=FALSE}
+# user 1770a96 has logs after onboarding and no onboarding log at all
+profiles <- profiles %>% 
+  filter(userId != "1770a96adebb1bc071c542e38b649d75") %>% 
+  mutate(onboardingState = ifelse(userId %in% users.completedOnboarding, "completed", 
+                                  ifelse(userId %in% users.quitOnboarding, "quit", 
+                                         ifelse(userId %in% users.withInconsistentOnboarding,
+                                                "missingData", NA)))) %>% 
+  drop_na(onboardingState) %>% 
+  mutate(onboardingState = as.factor(onboardingState))
+```
+
+
+```{r remove temporary objects, include=FALSE}
+rm(checkTwoSensors, completedOnboarding, getSensors, hasConsistentOnboarding, hasOnboardingDataGap,
+   hasOnboardingInteraction, navigatedAfterOnboarding, users.completedOnboarding, users.quitOnboarding,
+   users.registered, users.withConsistentOnboarding, users.withInconsistentOnboarding,
+   users.withNavigateLogs)
+```
+
+### `doOnboarding` Logs  
+This type of log should indicate when a user begins and completes the onboarding process.
+The sensor is triggered in both events and sends a log message with the `start` and `complete` value, respectively.
+We found, however, that the sensor was not adapted to the expanded onboarding process:
+The original onboarding process only had two steps.
+Upon completing the second step, the `doOnboarding` sensor was (correctly) invoked.
+The expanded onboarding process consists of more then two steps, but the sensor is still invoked after the second onboarding process step. 
+As a result, all users that finish the second onboarding step have a "completed onboarding" event even if these users quit the onboarding process in one of the subsequent steps.
+This was a deliberate decision in order to reduce the implementation effort.
+A documentation of this decision would have been neccessary and makes the case, not only for a documentation of the experimental design, but also for documenting related implementation details.
+
+### `logNumber` Attribute
+Taking all logs of a user session, there should exist no gaps in the log number.
+We found first signs for possible gaps in the `logNumber` attribute of the log messages.
+This could indicate some type of data leak between the source system and the data lake.
+(Note that a further review of the related analysis is neccessary in order to be sure that a problem really exists.)
+
+### Random Assignment of Treatment
+The figure below summarizes the empirical transition probabilities from one onboarding step to the next.
+The empirical values are subject to statistical variations but in general support the conclusion that the assignment was randomized correctly.
+
+From the following figure, we can also see that the users who quit the onboarding process, still received a treatment. 
+We will thus add them to the treatment group.
+
+Consider the following definitions to understand the diagram better. 
+
+- **users.X**: set of users, which where tracked by sensor X
+- **users.X.Y**: set of users, which where tracked by sensors X and Y
+- **P(X)**: |users.X| / 318, hence P(X) is the relative part of all users which where tracked by sensor X
+- **P(X,Y)**: |users.X.Y| / 318, analog as above
+- **P(X|Y)**: P(X,Y) / P(Y), hence P(X|Y) is the relative part of all users which where tracked by sensor X under the condition that they where tracked by sensor Y aswell
+
+![*onboarding funnel*](figures/onboardingPathNumbers.png)
+
+### Summary
+The data validation revealed major problems in the logging implementation.
+We found a simultaneous failure of multiple parts of the sensor system (`navigate`, `doOnboarding` and `logNumber`-Attribute) that may have otherwise helped to recover some of the information. 
+For example, the proper functioning of `logNumber` and `doOnboarding` could have been used to determine the length of the onboarding path.
+This could have been used to identify the exact onboarding path.
+
+These problems illustrate the need of a thourough review of the general logging system as well as the need for pretests of specific experiments.
+
+## Identification of User Groups
+
+The treatment group of the respective user is computed from that user's navigation path (based on the navigation logs).
+
+| treatment value | full onboarding process with sensorIds |
+| --------------------- | ----------------------------------------------------------------- |
+| **control** | *sportSpecificOnboardingScreenPage* >67> *overview* |
+| **commitment** | *sportSpecificOnboardingScreenPage* >70> *tellAFriendPage* >yes>71> *overview* |
+| **noCommitment** | *sportSpecificOnboardingScreenPage* >70> *tellAFriendPage* >no>72> *overview* |
+| **personalization** | *sportSpecificOnboardingScreenPage* >68> *onboardingSummaryPage* >69> *overview* |
+| **persCommitment** | *sportSpecificOnboardingScreenPage* >68> *onboardingSummaryPage* >73> *tellAFriendPage* >yes>71> *overview* |
+| **persNoCommitment** | *sportSpecificOnboardingScreenPage* >68> *onboardingSummaryPage* >73> *tellAFriendPage* >no>72> *overview* | 
+
+```{r create new variable treatment in profiles, include=FALSE}
+source("utilities/getTreatment.R")
+profiles <- data.frame(profiles, treatment = sapply(profiles$user, getTreatment))
+rm(getTreatment)
+```
+
+The distribution over the treatment is summarized in the following table.
+
+```{r treatment overview, echo=FALSE}
+profiles %>% group_by(treatment) %>% summarise(count = n()) %>% ungroup() %>%
+  kable() %>% kable_styling("striped")
+```
+
+Aside from the specific treatment group, we will also assign a coarse treatment group.
+The coarse treatment group value is also assigned to users that quit the onboarding or where onboarding data is missing. 
+
+```{r assign coarse treatment, include = FALSE}
+profiles <- profiles %>% 
+  mutate(coarseTreatment = 
+           ifelse(onboardingState == "missingData", "treatmentInconsistent",
+                  ifelse(onboardingState == "quit" | treatment != "control", 
+                         "treatment", "control"))) %>% 
+  mutate(coarseTreatment = as.factor(coarseTreatment))
+
+profiles %>% select(userId, onboardingState, coarseTreatment, treatment, everything())
+```
+
+## Validation of `interactWithWorkout`-Logs
+We found that a number of workouts are logged as completed but not as started, i.e. `startWorkout`-logs are missing.
+The majority of these workouts are completed by users that take part in the experiment.
+Even though there exists no obvious connection between missingness and treatment, there is still the risk that this could bias the results of analysis. 
+We thus use the `completedWorkouts` table directly instead of the `workouts` table (where these workouts were discarded).  
+
+It is nevertheless critical to investigate the circumstances more carfully: 
+Why are these logs missing? 
+Is the rest of the workout logged correctly? 
+Could this problem exists in other logs, too?
+
+```{r workouts completed not started, echo=FALSE}
+source("utilities/workouts.R")
+workoutTables <- generateWorkoutTables(behaviorLogs$interactWithWorkoutLogs)
+
+workoutsCompletedNotStarted <- anti_join(workoutTables$completedWorkouts, 
+                                         workoutTables$startedWorkouts, by = "workoutId") 
+rm(workoutTables, workoutsCompletedNotStarted)
+```
+
+## Validation of Activities before Registration
+In the following we will find out how many users have strange log behaviour considering logs before the date of registration, logs before the date of starting the onboarding and onboarding before registration. Lets have a look on some numbers. 
+
+```{r create overview table, echo=FALSE}
+source("utilities/activitiesBeforeRegistration.R")
+
+#For this section we create a dataframe earlyUserLogs for the analysis of logs before registration/onboarding and onboarding before registration, and add those three variables with values TRUE and FALSE to this dataframe
+earlyUserLogs <- profiles %>% select(userId, coarseTreatment)
+earlyUserLogs <- earlyUserLogs   %>% 
+  mutate(logsBeforeRegistration = sapply(earlyUserLogs$userId, hasLogsBeforeRegistration)) %>%
+  mutate(logsBeforeOnboarding = sapply(earlyUserLogs$userId, hasLogsBeforeOnboarding)) %>%
+  mutate(onboardingBeforeRegistration = sapply(earlyUserLogs$userId, hasOnboardingBeforeRegistration))
+rm(hasLogsBeforeRegistration, hasLogsBeforeOnboarding, hasOnboardingBeforeRegistration)
+
+#Create a table for overview 
+earlyUserLogs %>% select(coarseTreatment, logsBeforeRegistration, logsBeforeOnboarding, onboardingBeforeRegistration) %>%
+  group_by(coarseTreatment, logsBeforeRegistration, logsBeforeOnboarding, onboardingBeforeRegistration) %>%
+  count() %>% ungroup() %>% 
+  rename(numberOfUsers = n) %>%
+  kable() %>% kable_styling("striped")
+rm(earlyUserLogs)
+```
+
+The three columns in the middle describe invalid log behaviour, an user with value FALSE in all these columns does not have logs which are invalid in this sense. As we can see we have only 9 users with existing prominent logs. All of these 9 users have completed their onboarding with a treatment. 
+
+- 8 of them have the following chronological pattern: firstLog = onboardingDate < registrationDate
+- 1 of them has the pattern: firstLog < registrationDate < onboardingDate
+
+For these 9 users lets have a look on the number of activities before registration, resp. before onboarding, to see how relevant those users are considering activeness on the app. 
+
+```{r create inconsistencies table, echo=FALSE}
+#create overview
+profiles %>% select(userId) %>%
+  mutate(logsBeforeRegistration = sapply(profiles$userId, numberOfLogsBeforeRegistration),
+         logsBeforeOnboarding = sapply(profiles$userId, numberOfLogsBeforeOnboarding),
+         totalLogs = sapply(profiles$userId, totalNumberOfLogs)) %>%
+  filter(logsBeforeRegistration > 0 | logsBeforeOnboarding > 0) %>%
+  kable() %>% kable_styling("striped")
+rm(numberOfLogsBeforeOnboarding, numberOfLogsBeforeRegistration, totalNumberOfLogs, firstLog)
+```
+
+As we can see, in most cases we have a relative small number of logs before registration compared to the total number of logs. We can see aswell, that the one user with logs before onboarding, actually just has one log before his onboarding, which is the same log being before his registration. Obviously it should not be possible to interact with the app before of registering, or making onboarding. Therefore this happening might be explained by a malfunction of the log tracking system or by a malfunction of the registration tracking system. 
+
+In total we do not have many users with in this way invalid logs, and out of the ones who do have it, in most cases most logs have been produced after the registration process. Therefore for the further analysis it should not be essential to exclude any of the 9 users above. 
+
+Contrarily it might be senseful to set the zero point of time not to the date of registration, but to the date of onboarding, as from this date on users have interacted with the app which indicates a senseful beginning of their app interaction. As we are trying to measure the effect of an onboarding nudge onto the behaviour of users, logically we are maybe actually forced to interpret the onboarding date as the zero point of time for all users. Therefore the following analysis observes all behaviours relatively to the onboarding date. 
+
+# Data Analysis
+
+The objective of the following analysis is to determine the effectiveness of the treatment. 
+Since we can only assign specific treatment groups for a fraction of the users, due to the missing data issues, the treatment groups are to small to conduct meaningful analysis.
+We will thus conduct the analysis based on the grouping into *some treatment* and *control*, which is reflected in the variable `coarseTreatment`. 
+
+We first define the dimensiontable `userDimension` and import utilities. 
+
+```{r definition userDimension and import utilities}
+source("utilities/engagementAnalysis.R")
+source("utilities/workouts.R")
+source("utilities/visits.R")
+
+userDimension <- profiles
+```
+
+## Preliminary Consideration
+
+### Should we include users with corrupt data?
+The question of whether we should include the users with missing onboarding data in the analysis based on the assumption that they at least received some treatment, is still left to answer.
+Since the system clearly encountered a problem during the onboarding process of these users, there is the risk that not only the logging was malfunctioning but they maybe had a different (bad) user experience.
+To answer this question, we will compare the number of workouts done for users with corrupt data with users that have intact data (and received some treatment).
+
+The table below compares the average number of workouts done for each of these two groups within the first two weeks.
+
+```{r compare average workouts intact vs corrupt, echo=FALSE}
+workoutTables <- generateWorkoutTables(behaviorLogs$interactWithWorkoutLogs)
+workoutsCompleted <- workoutTables$completedWorkouts
+
+numberOfUsersPerGroup <- count(userDimension, coarseTreatment) %>% rename(numberOfUsers = n)
+
+inner_join(workoutsCompleted, userDimension, by = "userId") %>%
+  addWeeksSinceOnboardingColumn() %>%
+  filter(coarseTreatment %in% c("treatment", "treatmentInconsistent") & weeksSinceOnboarding <= 2) %>%
+  count(coarseTreatment) %>% 
+  rename(numberOfWorkouts = n) %>% 
+  left_join(numberOfUsersPerGroup, by = "coarseTreatment") %>% 
+  mutate(averageNumberOfWorkouts = round(numberOfWorkouts / numberOfUsers, 3)) %>%
+  kable() %>% kable_styling("striped")
+rm(numberOfUsersPerGroup)
+```
+
+Because of the large difference in the average number of workouts that exists despite the relatively large sample size (of approximatelly 100 users each), we think that it is likely, that the group with corrupt data has had a different, more likely a bad onboarding experience. On top of that in the table above we are considering 24 onboarding quitters in the treatment group which certainly didn´t finish any workouts as they never really entered the app. Taking them out we actually find the following average workouts table.  
+
+```{r adapted table, echo=FALSE}
+numberOfUsersPerGroup <- profiles %>% 
+  filter(onboardingState != "quit") %>%
+  count(coarseTreatment) %>% rename(numberOfUsers = n)
+
+inner_join(workoutsCompleted, userDimension, by = "userId") %>%
+  addWeeksSinceOnboardingColumn() %>%
+  filter(coarseTreatment %in% c("treatment", "treatmentInconsistent") & weeksSinceOnboarding <= 2) %>%
+  count(coarseTreatment) %>% 
+  rename(numberOfWorkouts = n) %>% 
+  left_join(numberOfUsersPerGroup, by = "coarseTreatment") %>% 
+  mutate(averageNumberOfWorkouts = round(numberOfWorkouts / numberOfUsers, 3)) %>%
+  kable() %>% kable_styling("striped")
+rm(numberOfUsersPerGroup)
+rm(workoutsCompleted, workoutTables)
+```
+
+We can see that the average number of workouts is even more different. We will thus not join the two groups and discard the group with missing data from the following analysis.
+
+We also want to point out that this approach should not invalidate the analysis results since the removal is done purely based on the fact of whether the data is corrupt or not and, thus, does not represent a sampling on the dependent variable.
+The exclusion of the data can therefore be considered random with respect to the dependent (outcome) variable. 
+
+```{r discard inconsistent data, include=FALSE}
+#Exclude corrupt data from userDimension:
+userDimension <- filter(userDimension, coarseTreatment != "treatmentInconsistent") %>% 
+  mutate(coarseTreatment = fct_drop(coarseTreatment))
+```
+
+### Basic Analysis Procedure
+
+The following analysis builds on a prethought procedure, which suites this situation of organizing the data. For every of the following data manipulations we base on a **dimension table**, which contains, to the type of analysis, independent basic information of users as their onboarding date or treatment value. This dimension table we will join then with a **fact table**, which contains values we create according to the type of analysis we are aiming at this point, for example looking at a value for every user displaying the completed workouts in total, or the total time spent in the app. The following diagram will make this again clearer. The example shows a fact table, displaying *completeWorkout* interactions on certain dates, indicating this user has completed a workout at this day. 
+
+![*analysis procedure*](figures/analysis_procedure.png)
+
+To see it in R code, we will compute all joined fact tables for each chapter `Completed Workouts`, `Started Workouts`, `Visits` and `Visit Durations` in the following statistical section here for the reader to see, and have a look on a slice of one joined table. The *dimension table* has already been computed and preprocessed, it is called `userDimension`. 
+
+```{r basic analysis procedure}
+#Create fact tables
+workoutTables <- generateWorkoutTables(behaviorLogs$interactWithWorkoutLogs)
+workoutsCompleted <- workoutTables$completedWorkouts
+workoutsStarted <- workoutTables$startedWorkouts
+#visitDurations and visits facttables from visits.R
+
+#Join facttables with dimensiontable userDimension:
+workoutsCompleted <- joinFactTableWithUserDimension(workoutsCompleted, userDimension)
+workoutsStarted <- joinFactTableWithUserDimension(workoutsStarted, userDimension)
+visits <- joinFactTableWithUserDimension(visitsPerDay, userDimension)
+visitDurations <- joinFactTableWithUserDimension(visitDurationsTable, userDimension)
+
+#add value daysSinceOnboarding to each table:
+workoutsCompleted <- addDaysSinceOnboardingColumn(workoutsCompleted)
+workoutsStarted <- addDaysSinceOnboardingColumn(workoutsStarted)
+visits <- addDaysSinceOnboardingColumn(visits)
+visitDurations <- addDaysSinceOnboardingColumn(visitDurations)
+
+#example overview of workoutsCompleted:
+workoutsCompleted %>% select(userId, daysSinceOnboarding, coarseTreatment, interaction) %>%
+  slice(1:10) %>%
+  kable() %>% kable_styling("striped")
+```
+
+In the following we will use the above constructed tables and make respective tests to find out significant answers to the question, whether the implementation of onboarding nudges has had an influence on user behaviour. 
+
+```{r remove variables, echo=FALSE}
+rm(visitDurationsTable, visitsPerDay)
+rm(generateWorkoutTables)
+rm(joinFactTableWithUserDimension)
+```
+
+## Statistical Section
+
+### Completed Workouts
+
+We now turn a comparison of the number of completed workouts per treatment group over time.
+From the plot below, we can clearly observe an increased number of workouts in the treatment group compared to the control group.
+We can also observe that the overall number of completed workouts drops sharply over the first 3 to 4 weeks. 
+
+```{r completed workouts weeky plot, echo=FALSE}
+averageWorkoutsPerWeek <- computeAverageWorkoutsPerWeek(workoutsCompleted, userDimension)
+
+workoutsPerHundredUsers <- averageWorkoutsPerWeek %>% 
+  mutate(control = ceiling(control * 100), treatment = ceiling(treatment *  100))
+
+ggplot(workoutsPerHundredUsers, aes(x = weeksSinceOnboarding, y = value, colour = Group)) +
+  geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+  scale_x_continuous(breaks = seq(0, 22, by = 1), limits = c(1, 22)) +
+  scale_y_continuous(breaks = seq(0, 30, by = 5), limits = c(0, 30)) +
+  labs(x = "Weeks since Onboarding", y = "Number of Completed Workouts per 100 Users") +
+  ggtitle("Number of Completed Workouts per Week")
+
+rm(computeAverageWorkoutsPerWeek)
+```
+
+In the following we are looking for significant statements of user workouts behaviour change caused by the experience of a treatment with the help of statistical tests. 
+
+#### Completed Workouts in the First Week
+
+```{r create testData, echo=FALSE}
+#Create dataframe for test:
+testData <- workoutsCompleted %>% 
+  addWeeksSinceOnboardingColumn() %>% 
+  group_by(userId, coarseTreatment, weeksSinceOnboarding) %>%
+  summarise(workoutsPerWeek = n()) %>%
+  ungroup() %>% 
+  filter(weeksSinceOnboarding == 1) %>% 
+  select(-weeksSinceOnboarding) %>% 
+  rename(workoutsInFirstWeek = workoutsPerWeek) %>%
+  right_join(userDimension, by = c("userId", "coarseTreatment")) %>%
+  replace_na(list(workoutsInFirstWeek = 0)) %>% 
+  select(coarseTreatment, workoutsInFirstWeek)
+```
+
+Here we compare the mean values of workouts in the first week for the two groups we have, and look for a significant difference. We do that with help of the Welch Two Sample t-test. The null hypothesis is, that the difference of average workouts in the first week of the two groups is equal to 0. 
+
+```{r make test, echo=FALSE}
+t.test(testData$workoutsInFirstWeek ~ testData$coarseTreatment)
+```
+
+As we have a high p-value, we can not reject the null hypothesis confidently. Therefore this test does not allow us to interpret a significant difference in average workouts in the first week. 
+
+#### Completing at least One Workout in the First Week
+
+Now we want to find out, whether the characteristics `{control,treatment}` and `{no workout completed, at least one workout completed}` have a significant dependency. We will do that with help of Pearsons Chi-squared test. This helps us to interpret, whether the implementation of the nudges has a significant effect on doing at least one workout or not. Lets have an overview with a contingency table. 
+
+```{r data transformation, echo=FALSE}
+chiTestData <- testData %>% 
+  mutate(workoutDone = ifelse(workoutsInFirstWeek == 0, "noWorkoutCompleted", "workoutCompleted"))
+kable(table(chiTestData$coarseTreatment, chiTestData$workoutDone)) %>% kable_styling("striped")
+```
+
+The null hypothesis is, that the two characteristics are independent. 
+
+```{r significance test, echo=FALSE}
+chisq.test(chiTestData$coarseTreatment, chiTestData$workoutDone, correct=FALSE)
+rm(chiTestData)
+```
+
+As the p-value here is again very high, we cannot confidently reject the null hypothesis. Therefore we cannot state a significant difference in doing-at-least-one-workout behaviour comparing the two groups. 
+
+#### Number of Completed Workouts Comparison
+
+Now we will move the focus on users with at least one finished workout. We want to find out, whether the fact that an user has experienced an onboarding nudge has a significant effect on the amount of workouts this user has finished with the condition that this user has anyway finished at least one workout. Therefore we test, whether the characteristics `{control,treatment}` and `{one workout completed, more than one workout completed}` have a significant dependency or not. We do that again with help of Pearsons Chi-squared test. 
+
+First lets have a look on some numbers again. The following table and plot show for each of the two groups the relative user sizes satisfying the corresponding completing amount of workouts in the first week. 
+```{r completed workouts barplot, echo=FALSE}
+library("ggplot2")
+#Create dataframe for coming barplot:
+barplotData <- testData %>% 
+  group_by(coarseTreatment, workoutsInFirstWeek) %>% count() %>% ungroup() %>%
+  rename(absoluteSize = n) %>%
+  group_by(coarseTreatment) %>%
+  mutate(groupSize = sum(absoluteSize)) %>% ungroup() %>%
+  mutate(relativeSize = 100*round(absoluteSize / groupSize, 2)) %>%
+  select(-groupSize)
+
+#Table with relative user sizes:
+barplotData %>% 
+  select(-absoluteSize) %>% 
+  spread(key = coarseTreatment, value = relativeSize) %>%
+  mutate(treatment = replace_na(treatment, 0)) %>%
+  mutate(control = 1 / 100 * control) %>%
+  mutate(treatment = 1 / 100 * treatment) %>%
+  kable() %>% kable_styling("striped") 
+
+#Plot with relative user sizes:
+barplotData %>% ggplot(aes(x = workoutsInFirstWeek, y = relativeSize, fill = coarseTreatment)) + 
+  scale_y_continuous(breaks = seq(0, 100, 20), limits = c(0, 100)) + 
+  geom_bar(stat = "identity", position = position_dodge()) + 
+  labs(title = "Relative Partitions for Completed Workouts in the First Week ", 
+       x = "Completed Workouts in First Week", y = "Relative Size per Group (%)")
+
+rm(barplotData)
+```
+
+We can see that both groups have mostly users which didn´t even finish one workout. As the absolute numbers of users with at least one finished workout are quiet small (control -> 14, treatment -> 18), this test may not be very meaningful. 
+
+```{r create testData 2, echo=FALSE}
+chiTestData2 <- testData %>% 
+  filter(workoutsInFirstWeek > 0) %>% 
+  mutate(workoutDone = ifelse(workoutsInFirstWeek == 1, "oneWorkoutCompleted", "moreThanOneWorkoutCompleted"))
+chisq.test(chiTestData2$coarseTreatment, chiTestData2$workoutDone, correct=FALSE)
+rm(testData, chiTestData2)
+```
+
+As the p-value is very small, this test does reject the null hypothesis quiet confidently and therefore underline the statement, that the implementation of the nudges does have an increasing effect on finishing more than one workout, under the condition of finishing at least one workout. As the sample size is small it is not very meaningful. Actually, the big number of users in both groups without even one finished workout tells us a generally passive sporting behaviour of all users considering the workout use of the app. 
+
+```{r remove variables completed workouts, include=FALSE}
+rm(averageWorkoutsPerWeek, workoutsPerHundredUsers)
+```
+
+### Started Workouts
+
+Here we have a look on started workouts. We will have a look, whether the number of started and completed workouts differ very much, and if we again can find significant differencies observing our two user groups. Lets have again a look over a plot over time. The plot shows, like the plot of completed workouts, an increased number of started workouts by treatment users in the first two weeks. As expected, the numbers drop sharply in the first 4 weeks like the numbers of completed workouts. If we compare the numbers of started and completed workouts we can find minimal differencies, which might just statistically happen. For example a started workout might not be completed because an user overcame time issues while doing the exercise, or in some cases aswell didn´t like the workout. But as the differencies are rather small, we will not look further into that. 
+
+```{r started workouts weekly plot, echo=FALSE}
+#Create dataframe to display total started workouts per day for each group:
+totalStartedWorkoutsPerDay <- workoutsStarted %>%
+  group_by(coarseTreatment, daysSinceOnboarding) %>%
+  count() %>% ungroup() %>% 
+  rename(totalStartedWorkoutsPerDay = n) %>%
+  expandWithInactiveDays() %>% 
+  replace_na(list(totalStartedWorkoutsPerDay = 0))
+
+#Create dataframe to display the average number of started workouts per week for each group:
+groupSizes <- userDimension %>%
+  #filter(onboardingState != "quit") %>%
+  group_by(coarseTreatment) %>%
+  summarise(groupSize = n()) %>% ungroup()
+
+averageStartedWorkoutsPerDay <- totalStartedWorkoutsPerDay %>%
+  left_join(groupSizes, by = "coarseTreatment") %>%
+  mutate(averageStartedWorkoutsPerDay = round(totalStartedWorkoutsPerDay / groupSize, 2)) %>%
+  select(-totalStartedWorkoutsPerDay, -groupSize)
+rm(groupSizes)
+
+#Create averageStartedWorkoutsPerWeek dataframe:
+averageStartedWorkoutsPerWeek <- averageStartedWorkoutsPerDay %>%
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  select(-daysSinceOnboarding) %>%
+  group_by(coarseTreatment, weeksSinceOnboarding) %>%
+  summarise(averageStartedWorkoutsPerWeek = sum(averageStartedWorkoutsPerDay)) %>% ungroup()
+
+#Create Plot:
+endweek <- 12
+averageStartedWorkoutsPerWeek %>%
+  mutate(averageStartedWorkoutsPerWeek = 100 * averageStartedWorkoutsPerWeek) %>%
+  spread(key = coarseTreatment, value = averageStartedWorkoutsPerWeek) %>%
+  slice(1:endweek) %>%
+  ggplot(aes(x = weeksSinceOnboarding), y = value, colour = Group) + 
+  geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+  scale_x_continuous(breaks = seq(0, endweek, by = 1), limits = c(1, endweek)) +
+  scale_y_continuous(breaks = seq(0, 30, by = 5)) +
+  labs(x = "Weeks since Onboarding", y = "Number of Started Workouts per 100 Users") +
+  ggtitle("Number of Started Workouts per Week")
+rm(endweek)
+```
+
+In the following we will again look for significant statements considering the started workouts, but, as the numbers to the completed workouts do not differ much, we will not expect much different results as in the analysis of completed workouts. 
+
+#### Started Workouts in the First Week
+
+Here we compare the number of started workouts in the first Week of the two groups by the Welch Two Sample t-Test.
+
+```{r started workouts create test data, echo=FALSE}
+testData <- workoutsStarted %>% 
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  filter(weeksSinceOnboarding == 1) %>%
+  group_by(userId) %>%
+  summarise(startedWorkoutsInFirstWeek = n()) %>% ungroup() %>%
+  right_join(userDimension, by = "userId") %>%
+  replace_na(list(startedWorkoutsInFirstWeek = 0)) %>%
+  select(coarseTreatment, startedWorkoutsInFirstWeek) 
+t.test(testData$startedWorkoutsInFirstWeek ~ testData$coarseTreatment)
+```
+
+The p-Value is high, therefore we cannot state a significant difference on the amount of started workouts in the first week between the two groups. 
+
+#### Number of Started Workouts Comparison
+
+We test, whether the characteristics `{control,treatment}` and `{one workout started, more than one workout started}` are independent or not. We do that with the help of Pearsons Chi-squared test. 
+
+The following table and plot show for each of the two groups the relative user sizes satisfying the corresponding amount of workouts in the first week. 
+```{r started workouts barplot, echo=FALSE}
+library("ggplot2")
+#Create dataframe for upcoming barplots
+barplotData <- testData %>% 
+  group_by(coarseTreatment, startedWorkoutsInFirstWeek) %>%
+  summarise(absoluteSize = n()) %>% ungroup() %>%
+  group_by(coarseTreatment) %>%
+  mutate(groupSize = sum(absoluteSize)) %>% ungroup() %>%
+  mutate(relativeSize = 100 * round(absoluteSize / groupSize, 2)) %>%
+  select(-groupSize)
+
+#print table:
+barplotData %>% 
+  select(-absoluteSize) %>% 
+  spread(key = coarseTreatment, value = relativeSize) %>%
+  mutate(control = replace_na(control, 0)) %>%
+  mutate(control = 1 / 100 * control) %>%
+  mutate(treatment = 1 / 100 * treatment) %>%
+  kable(caption = "Relative User Group Sizes for Started Workouts in The First Week") %>%
+  kable_styling("striped") 
+
+#print barplot: 
+barplotData %>% ggplot(aes(x = startedWorkoutsInFirstWeek, y = relativeSize, fill = coarseTreatment)) + 
+  scale_x_continuous(breaks = seq(0, 8, 1)) +
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 100)) +
+  geom_bar(stat = "identity", position = position_dodge()) + 
+  labs(title = "Relative Partitions for Started Workouts in the First Week ", 
+       x = "Started Workouts in First Week", y = "Relative Size per Group (%)")
+rm(barplotData)
+```
+
+As expected, most users didn´t even start a workout. Looking on the ones who did, we test a correlation of the above named characteristics here. 
+
+```{r started workouts testData 2, echo=FALSE}
+chiTestData3 <- testData %>% 
+  filter(startedWorkoutsInFirstWeek > 0) %>%
+  mutate(workoutStarted = ifelse(startedWorkoutsInFirstWeek == 1, "oneWorkoutStarted", "moreThanOneWorkoutStarted"))
+chisq.test(chiTestData3$coarseTreatment, chiTestData3$workoutStarted, correct=FALSE)
+rm(chiTestData3)
+rm(testData)
+```
+
+Contrarily to analog test for the completed workouts, we find a very high p-value here, which does not significantly indicate a difference between the user groups. Why we find this analytical difference here comparing started and completed workouts will not be answered here. We proceed with the analysis of other user dimensions. 
+
+```{r remove variables started workouts, include=FALSE}
+rm(workoutTables)
+rm(averageStartedWorkoutsPerDay, averageStartedWorkoutsPerWeek, totalStartedWorkoutsPerDay)
+```
+
+### Number of Visits
+
+In this section we focus on the number of app visits per day and compare them for the two user groups we have. We again have a look on a plot displaying the average number of visits per day. We can see that both groups start at around 1.5 visits average in the first day, then sharply drop such that we can find a somehow constant low level of 0.1 visits per day in the first two weeks for both groups. By the plot there is no obvious significant difference between the two groups. 
+
+```{r visits daily plot, echo=FALSE}
+#Create dataframe displaying total number of visits per day for each group:
+totalVisitsPerDay <- visits  %>%
+  select(coarseTreatment, daysSinceOnboarding, visits) %>%
+  group_by(coarseTreatment, daysSinceOnboarding) %>%
+  summarise(totalVisits = sum(visits)) %>%
+  ungroup() %>%
+  expandWithInactiveDays() %>%
+  replace_na(list(totalVisits = 0))
+
+#Create dataframe displaying average number of visits for one user per day for each group:
+groupSizes <- userDimension %>% 
+  #filter(onboardingState != "quit") %>% #Take out quitters
+  group_by(coarseTreatment) %>%
+  summarize(groupSize = n())
+
+averageVisitsPerDay <- totalVisitsPerDay %>%
+  left_join(groupSizes, by = "coarseTreatment") %>%
+  mutate(averageVisits = round(totalVisits / groupSize, 2)) %>%
+  select(-totalVisits, -groupSize)
+
+#Create plot for averageVisitsPerDay:
+daysToPlot <- 30 #How many days since Onboarding shall be plotted ?
+x.daysteps <- 2 #What steps shall be seen on the x axis ?
+averageVisitsPerDay %>% 
+  spread(key = coarseTreatment, value = averageVisits) %>%
+  slice(1:daysToPlot) %>%
+  ggplot(aes(x = daysSinceOnboarding, y = value, colour = Group)) +
+ geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+scale_x_continuous(breaks = seq(1, daysToPlot, by = x.daysteps), limits = c(1, daysToPlot)) +
+  scale_y_continuous(breaks = seq(0, 2, by = 0.2)) +
+  labs(x = "Days since Onboarding", y = "Average Number of Visits per User") +
+  ggtitle("Number of Visits per Day")
+rm(daysToPlot, x.daysteps)
+rm(groupSizes)
+```
+
+Having a look on visits per week in the following plot we can find a similar pattern. Both groups start at around 2.5 visits average in the first week and then sharply drop to around 0.2 to 0.5 visits per week in the following weeks. It attracts attention that the control group stays constantly at sligtly higher level from week three on that the treatment group. 
+
+```{r visits weekly plot, echo=FALSE}
+#Dataframe and Plot to display average number of visits per week:
+averageVisitsPerWeek <- averageVisitsPerDay %>%
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  group_by(coarseTreatment, weeksSinceOnboarding) %>%
+  summarise(averageVisits = sum(averageVisits)) %>% ungroup()
+  
+#Create Plot:
+weeksToPlot <- 10 #How many days since Onboarding shall be plotted ?
+x.weeksteps <- 1 #What steps shall be seen on the x axis ?
+averageVisitsPerWeek %>% 
+  spread(key = coarseTreatment, value = averageVisits) %>%
+  slice(1:weeksToPlot) %>%
+  ggplot(aes(x = weeksSinceOnboarding, y = value, colour = Group)) +
+geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+scale_x_continuous(breaks = seq(1, weeksToPlot, by = x.weeksteps), limits = c(1,weeksToPlot)) +
+  scale_y_continuous(breaks = seq(0, 3, by = 0.2)) +
+  labs(x = "Weeks since Onboarding", y = "Average Number of Visits per User") +
+  ggtitle("Number of Visits per Week ")
+rm(weeksToPlot, x.weeksteps)
+```
+
+In the following we have a look on visits in the first week. 
+
+#### Visits in the First Week
+
+Here we compare the average number of visits in the first week in between the two groups by Welch Two Sample t-Test.
+
+```{r visits testData, echo=FALSE}
+testData <- visits %>%
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  filter(weeksSinceOnboarding == 1) %>%
+  group_by(userId, coarseTreatment) %>%
+  summarise(visits = sum(visits)) %>% ungroup() %>%
+  right_join(userDimension, by = c("userId", "coarseTreatment")) %>% #Add users without visits
+  replace_na(list(visits = 0)) %>% 
+  select(coarseTreatment, visits)
+t.test(testData$visits ~ testData$coarseTreatment)
+rm(testData)
+```
+
+The p-value is very high, therefore a significant difference in the average number of visits in the first week in between the two groups cannot be stated. 
+
+Both groups seem to have similar visit numbers, even though the treatment group again starts with a higher value, as with started and completed workouts, but then stays lower as the control group for all weeks from week three on. Signifcant difference in the first week could not be found. 
+
+```{r remove variables visits, include=FALSE}
+rm(averageVisitsPerDay, averageVisitsPerWeek, totalVisitsPerDay)
+```
+
+### Visit Durations
+
+Another behaviour dimension we have a look on are app visit durations of both groups. As the plots below show, we again find early and sharply dropping of the values for both groups, which seems to be natural and consistent with previous observations. A significant difference comparing the two groups is again not really obvious, and actually for the first time the control group starts with a higher value at day one. 
+
+```{r durations create tables, echo=FALSE}
+#Create dataframe displaying total visit durations per day for both groups: 
+totalVisitDurationPerDay <- visitDurations %>%
+  filter(onboardingState == "completed") %>% 
+  select(coarseTreatment, daysSinceOnboarding, visit_time) %>%
+  group_by(coarseTreatment, daysSinceOnboarding) %>%
+  summarise(totalVisitDurationPerDay = sum(visit_time)) %>% 
+  ungroup() %>%
+  mutate(totalVisitDurationPerDay = round(as.numeric(totalVisitDurationPerDay / 60), 2)) %>% # totalVisitDurationPerDay in minutes
+  expandWithInactiveDays() %>%
+  replace_na(list(totalVisitDurationPerDay = 0))
+
+#Create dataframe displaying user average visit durations per day for both groups:
+groupSizes <- userDimension %>%
+  #filter(onboardingState  != "quit") %>% #Take out onboarding quitters 
+  group_by(coarseTreatment) %>%
+  summarise(groupSize = n())
+
+averageVisitDurationPerDay <- totalVisitDurationPerDay %>%
+  left_join(groupSizes, by = "coarseTreatment") %>%
+  mutate(averageVisitDurationPerDay = round(totalVisitDurationPerDay / groupSize, 2)) %>%
+  select(-totalVisitDurationPerDay, -groupSize)
+
+rm(groupSizes)
+```
+
+```{r durations daily plot, echo=FALSE}
+#Create average visit duration plot on days:
+x.startday <- 0
+x.endday <- 30
+x.daysteps <- 2
+averageVisitDurationPerDay %>% 
+  spread(key = coarseTreatment, value = averageVisitDurationPerDay) %>%
+  slice(x.startday:x.endday + 1) %>%
+  ggplot(aes(x = daysSinceOnboarding, y = value, colour = Group)) + 
+geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+scale_x_continuous(breaks = seq(x.startday + 1, x.endday, by = x.daysteps), limits = c(x.startday + 1, x.endday)) +
+ scale_y_continuous(breaks = seq(0, 6, by = 1)) +
+  labs(x = "Days since Onboarding", y = "Average Visit Duration per User (Min)") +
+  ggtitle("Visit Durations per Day")
+
+rm(x.startday, x.endday, x.daysteps)
+```
+
+```{r durations weekly plot, echo=FALSE}
+#Create averageVisitDurationPerWeek dataframe:
+averageVisitDurationPerWeek <- averageVisitDurationPerDay %>%
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  group_by(weeksSinceOnboarding, coarseTreatment) %>%
+  summarise(averageVisitDurationPerWeek = sum(averageVisitDurationPerDay)) %>%
+  ungroup()
+
+#Create average visit duration plot on weeks:
+x.startweek <- 0 #Start value on x axis ?
+x.endweek <- 10 #End value on x axis ?
+x.weeksteps <- 1 #What steps shall be seen on the x axis ?
+averageVisitDurationPerWeek %>% 
+  spread(key = coarseTreatment, value = averageVisitDurationPerWeek) %>%
+  slice(x.startweek:x.endweek) %>%
+ggplot(aes(x = weeksSinceOnboarding, y = value, colour = Group)) +
+  geom_line(aes(y = control, col = "Control")) +
+  geom_point(aes(y = control, col = "Control")) +
+  geom_line(aes(y = treatment, col = "Treatment")) +
+  geom_point(aes(y = treatment, col = "Treatment")) +
+ scale_x_continuous(breaks = seq(x.startweek, x.endweek, by = x.weeksteps)) +
+  scale_y_continuous(breaks = seq(0, 12, by = 1), limits = c(0, 11)) +
+  labs(x = "Weeks since Onboarding", y = "Average Visit Duration per User (Min)") +
+  ggtitle("Visit Durations per Week")
+
+rm(x.startweek, x.endweek, x.weeksteps)
+```
+
+We again compare visit durations in the first week in the following test. 
+
+#### Visit Durations in the First Week
+
+We compare average visit durations of the two groups with help of Welchs Two Sample tTest.
+
+```{r durations testData, echo=FALSE}
+testData <- visitDurations %>%
+  mutate(weeksSinceOnboarding = ceiling(daysSinceOnboarding / 7)) %>%
+  filter(weeksSinceOnboarding == 1) %>%
+  mutate(visitDuration = as.numeric(visit_time)) %>%
+  select(userId,coarseTreatment, visitDuration) %>%
+  right_join(userDimension, by = c("userId", "coarseTreatment")) %>% #Add users with visitDuration = 0
+  replace_na(list(visitDuration = 0)) %>%
+  select(coarseTreatment, visitDuration)
+t.test(testData$visitDuration ~ testData$coarseTreatment)
+rm(testData)
+```
+
+The p-Value is very high, therefore a significant difference between average spending times in the app in the first week cannot be stated.
+
+```{r remove variables visit durations, include=FALSE}
+rm(expandWithInactiveDays, expandWithInactiveWeeks, 
+   addWeeksSinceOnboardingColumn, addDaysSinceOnboardingColumn)
+rm(averageVisitDurationPerDay, averageVisitDurationPerWeek, totalVisitDurationPerDay)
+```
+
+## Analysis Conclusion
+
+All in all we looked at four behaviour dimensions `Completed Workouts`, `Started Workouts`, `Number of Visits` and `Visit Durations` and have not found significant differencies between the two user groups `control` and `treatment`. It is always attracting attention that the `treatment` group starts higher at the first day or week compared to the `control` group, but then both group values drop sharply to stay low, but somehow constant for following days and weeks. It seems, that users were interested in the app in the beginning, trying it out etc. but lost interest quickly, and only a few users stayed active in the app. Anyway this seems to be natural.
+
+Considering the high number of users not even starting or completing a workout, resumingly we can see an actually passive behaviour of users in this app, at least considering the interest in interacting with workouts. Aside of workouts, an user can be active inside the app by reading and informing himself, which would be observable basically by the time this user spends in the app. If we consider those visit durations and look at the numbers in the plots above, we can interpret the values for both groups as rather low. Same is with the number of visits. 
+
+Therefore we can conclude a rather passive interaction of users with the app in general, and cannot state significant user behaviour change by experiencing onboarding nudges. 
+
+# General Plan of Procedures for Future Experiments
+
+When evaluating the results from the onboarding-experiment, we encountered several issues which emerged presumably because we did not have a general protocol on how to conceptualize, design and pre-test the experiment. 
+Following on, we propose a general plan of procedures for future experiments in DEFAULT
+
+1. Conceptualization
+
+Before launching an experiment, one has to seriously consider the underlying research question and the scope of the experiment. 
+In this regard it is important to decide on whether the experiment should actively or passively manipulate user behavior. 
+Active user behavior manipulation involves nudging experiments or implementation of additional features for randomized user groups. 
+Passive user behavior manipulation involves all experiments concerning layout and design of the app to improve user experience. 
+
+For future experiments we should clearly specify goals and research question of the experiment and clearly articulate the implementation and its visualization within the app. 
+Furthermore, we should articulate potential outcomes of the experiment.
+
+2. Experimental design
+
+When implementing the experiment in the app, the developers should receive a clear log-structure of the experiment as well as additional information concerning the experimental setup. 
+Most importantly, the developer of the experiment requires information about distribution of users to the respective treatment groups. 
+In order to standardize this process and reduce error susceptibility we could think of implementing a micro-service or API for automatic experimental group allocation. 
+Furthermore, users should have one treatment group allocated beforehand. 
+This enables us to test whether final allocation to the treatment group was carried out correctly.
+
+3. Pre-Testing
+
+Before launching the experiment to all of our users, pre-testing is essential to rule out further potential errors which remained hidden until this point. 
+Pre-testing can be implemented either as an alpha or beta test. 
+When the experiments are not urgent, both tests should be carried out. Alpha test would be a company internal pre-test where we test the experimental on testing devices. 
+Beta testing could be implemented as soft-launch, where we test the experiment on 20-30 users beforehand and evaluate the results of the soft launch after three days. Evaluation of the tests involves both correct sending of logs and allocation of users to the respective treatment groups. 
+When testing was successful, we finally launch the experiment.

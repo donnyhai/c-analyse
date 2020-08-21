@@ -3,13 +3,31 @@ title: "Covid19 Analysis"
 output: html_notebook
 ---
 
-This paper summarizes data of Covid19 (SARS-Cov2).
-
 bullets:
 corona deaths 
 sentinel
 cases, ratio etc
 hospital beds
 pcr-test-statistics
-
 comparison different countries
+
+Stand 22.08.2020
+
+This paper summarizes data of Covid19 (SARS-Cov2).
+
+Source "data/pdf/q1.pdf":
+
+```{r package imports, include=FALSE}
+#install.packages("tidyverse")
+#install.packages("lubridate")
+#install.packages("kableExtra")
+library("tidyverse")
+#library("lubridate")
+#library("kableExtra")
+```
+
+
+```{r}
+test_pos <- read.csv("data/csv/q1_1111.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
