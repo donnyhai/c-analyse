@@ -15,7 +15,12 @@ Stand 22.08.2020
 
 This paper summarizes data of Covid19 (SARS-Cov2).
 
-Source "data/pdf/q1.pdf":
+pcr herstelleung: siemens, qiagen, roche
+
+spez = 99.8% (diagnostics) (richtig positiv/falsch positiv)
+
+spezifität / sensitivität PCR Test
+
 
 ```{r package imports, include=FALSE}
 #install.packages("tidyverse")
@@ -26,13 +31,28 @@ library("tidyverse")
 #library("kableExtra")
 ```
 
+# Total deaths Germany
 
 ```{r}
-test_pos <- read.csv("data/csv/q1_1111.csv", header = TRUE, stringsAsFactors = FALSE)
+#test_pos <- read.csv("data/csv/q1_1111.csv", header = TRUE, stringsAsFactors = FALSE)
+total_deaths <- read.table(file = "data/tsv/demo_mmonth.tsv", sep = "\t", header = TRUE)
+sterbefaelle_DE <- read.table(file = "data/sterbefaelle_DE.xlsx", header = TRUE)
+sterbefaelle_DE_2020_tage <- read.table(file = "data/sterbefaelle_2020_DE.xlsx", header = TRUE)
+
+
 ```
 
-pcr herstelleung: siemens, qiagen, roche
+```{r}
+total_deaths_DE <- total_deaths %>% 
+  filter(grepl("DE", unit.month.geo.time, fixed = TRUE))
+```
 
-spez = 99.8% (diagnostics) (richtig positiv/falsch positiv)
 
-spezifität / sensitivität PCR Test
+
+
+
+
+
+
+
+

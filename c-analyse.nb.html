@@ -1752,22 +1752,43 @@ summary {
 <p>bullets: corona deaths sentinel cases, ratio etc hospital beds pcr-test-statistics comparison different countries</p>
 <p>Stand 22.08.2020</p>
 <p>This paper summarizes data of Covid19 (SARS-Cov2).</p>
-<p>Source “data/pdf/q1.pdf”:</p>
-<!-- rnb-text-end -->
-<!-- rnb-text-begin -->
-<!-- rnb-text-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGVzdF9wb3MgPC0gcmVhZC5jc3YoXCJkYXRhL2Nzdi9xMV8xMTExLmNzdlwiLCBoZWFkZXIgPSBUUlVFLCBzdHJpbmdzQXNGYWN0b3JzID0gRkFMU0UpXG5gYGAifQ== -->
-<pre class="r"><code>test_pos &lt;- read.csv(&quot;data/csv/q1_1111.csv&quot;, header = TRUE, stringsAsFactors = FALSE)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-text-begin -->
 <p>pcr herstelleung: siemens, qiagen, roche</p>
 <p>spez = 99.8% (diagnostics) (richtig positiv/falsch positiv)</p>
 <p>spezifität / sensitivität PCR Test</p>
 <!-- rnb-text-end -->
+<!-- rnb-text-begin -->
+<div id="total-deaths-germany" class="section level1">
+<h1>Total deaths Germany</h1>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI3Rlc3RfcG9zIDwtIHJlYWQuY3N2KFwiZGF0YS9jc3YvcTFfMTExMS5jc3ZcIiwgaGVhZGVyID0gVFJVRSwgc3RyaW5nc0FzRmFjdG9ycyA9IEZBTFNFKVxudG90YWxfZGVhdGhzIDwtIHJlYWQudGFibGUoZmlsZSA9IFwiZGF0YS90c3YvZGVtb19tbW9udGgudHN2XCIsIHNlcCA9IFwiXFx0XCIsIGhlYWRlciA9IFRSVUUpXG5zdGVyYmVmYWVsbGVfREUgPC0gcmVhZC50YWJsZShmaWxlID0gXCJkYXRhL3N0ZXJiZWZhZWxsZV9ERS54bHN4XCIsIGhlYWRlciA9IFRSVUUpXG5gYGAifQ== -->
+<pre class="r"><code>#test_pos &lt;- read.csv(&quot;data/csv/q1_1111.csv&quot;, header = TRUE, stringsAsFactors = FALSE)
+total_deaths &lt;- read.table(file = &quot;data/tsv/demo_mmonth.tsv&quot;, sep = &quot;\t&quot;, header = TRUE)
+sterbefaelle_DE &lt;- read.table(file = &quot;data/sterbefaelle_DE.xlsx&quot;, header = TRUE)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoibGluZSAxIGFwcGVhcnMgdG8gY29udGFpbiBlbWJlZGRlZCBudWxsc2luY29tcGxldGUgZmluYWwgbGluZSBmb3VuZCBieSByZWFkVGFibGVIZWFkZXIgb24gJ2RhdGEvc3RlcmJlZmFlbGxlX0RFLnhsc3gnXG4ifQ== -->
+<pre><code>line 1 appears to contain embedded nullsincomplete final line found by readTableHeader on &#39;data/sterbefaelle_DE.xlsx&#39;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc3RlcmJlZmFlbGxlX0RFXzIwMjBfdGFnZSA8LSByZWFkLnRhYmxlKGZpbGUgPSBcImRhdGEvc3RlcmJlZmFlbGxlXzIwMjBfREUueGxzeFwiLCBoZWFkZXIgPSBUUlVFKVxuYGBgIn0= -->
+<pre class="r"><code>sterbefaelle_DE_2020_tage &lt;- read.table(file = &quot;data/sterbefaelle_2020_DE.xlsx&quot;, header = TRUE)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoibGluZSAxIGFwcGVhcnMgdG8gY29udGFpbiBlbWJlZGRlZCBudWxsc2luY29tcGxldGUgZmluYWwgbGluZSBmb3VuZCBieSByZWFkVGFibGVIZWFkZXIgb24gJ2RhdGEvc3RlcmJlZmFlbGxlXzIwMjBfREUueGxzeCdcbiJ9 -->
+<pre><code>line 1 appears to contain embedded nullsincomplete final line found by readTableHeader on &#39;data/sterbefaelle_2020_DE.xlsx&#39;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudG90YWxfZGVhdGhzX0RFIDwtIHRvdGFsX2RlYXRocyAlPiUgXG4gIGZpbHRlcihncmVwbChcIkRFXCIsIHVuaXQubW9udGguZ2VvLnRpbWUsIGZpeGVkID0gVFJVRSkpXG5gYGAifQ== -->
+<pre class="r"><code>total_deaths_DE &lt;- total_deaths %&gt;% 
+  filter(grepl(&quot;DE&quot;, unit.month.geo.time, fixed = TRUE))</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+</div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIkNvdmlkMTkgQW5hbHlzaXMiDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpidWxsZXRzOg0KY29yb25hIGRlYXRocyANCnNlbnRpbmVsDQpjYXNlcywgcmF0aW8gZXRjDQpob3NwaXRhbCBiZWRzDQpwY3ItdGVzdC1zdGF0aXN0aWNzDQpjb21wYXJpc29uIGRpZmZlcmVudCBjb3VudHJpZXMNCg0KU3RhbmQgMjIuMDguMjAyMA0KDQpUaGlzIHBhcGVyIHN1bW1hcml6ZXMgZGF0YSBvZiBDb3ZpZDE5IChTQVJTLUNvdjIpLg0KDQpTb3VyY2UgImRhdGEvcGRmL3ExLnBkZiI6DQoNCmBgYHtyIHBhY2thZ2UgaW1wb3J0cywgaW5jbHVkZT1GQUxTRX0NCiNpbnN0YWxsLnBhY2thZ2VzKCJ0aWR5dmVyc2UiKQ0KI2luc3RhbGwucGFja2FnZXMoImx1YnJpZGF0ZSIpDQojaW5zdGFsbC5wYWNrYWdlcygia2FibGVFeHRyYSIpDQpsaWJyYXJ5KCJ0aWR5dmVyc2UiKQ0KI2xpYnJhcnkoImx1YnJpZGF0ZSIpDQojbGlicmFyeSgia2FibGVFeHRyYSIpDQpgYGANCg0KDQpgYGB7cn0NCnRlc3RfcG9zIDwtIHJlYWQuY3N2KCJkYXRhL2Nzdi9xMV8xMTExLmNzdiIsIGhlYWRlciA9IFRSVUUsIHN0cmluZ3NBc0ZhY3RvcnMgPSBGQUxTRSkNCmBgYA0KDQpwY3IgaGVyc3RlbGxldW5nOiBzaWVtZW5zLCBxaWFnZW4sIHJvY2hlDQoNCnNwZXogPSA5OS44JSAoZGlhZ25vc3RpY3MpIChyaWNodGlnIHBvc2l0aXYvZmFsc2NoIHBvc2l0aXYpDQoNCnNwZXppZml0w6R0IC8gc2Vuc2l0aXZpdMOkdCBQQ1IgVGVzdA==</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIkNvdmlkMTkgQW5hbHlzaXMiDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpidWxsZXRzOg0KY29yb25hIGRlYXRocyANCnNlbnRpbmVsDQpjYXNlcywgcmF0aW8gZXRjDQpob3NwaXRhbCBiZWRzDQpwY3ItdGVzdC1zdGF0aXN0aWNzDQpjb21wYXJpc29uIGRpZmZlcmVudCBjb3VudHJpZXMNCg0KU3RhbmQgMjIuMDguMjAyMA0KDQpUaGlzIHBhcGVyIHN1bW1hcml6ZXMgZGF0YSBvZiBDb3ZpZDE5IChTQVJTLUNvdjIpLg0KDQpwY3IgaGVyc3RlbGxldW5nOiBzaWVtZW5zLCBxaWFnZW4sIHJvY2hlDQoNCnNwZXogPSA5OS44JSAoZGlhZ25vc3RpY3MpIChyaWNodGlnIHBvc2l0aXYvZmFsc2NoIHBvc2l0aXYpDQoNCnNwZXppZml0w6R0IC8gc2Vuc2l0aXZpdMOkdCBQQ1IgVGVzdA0KDQoNCmBgYHtyIHBhY2thZ2UgaW1wb3J0cywgaW5jbHVkZT1GQUxTRX0NCiNpbnN0YWxsLnBhY2thZ2VzKCJ0aWR5dmVyc2UiKQ0KI2luc3RhbGwucGFja2FnZXMoImx1YnJpZGF0ZSIpDQojaW5zdGFsbC5wYWNrYWdlcygia2FibGVFeHRyYSIpDQpsaWJyYXJ5KCJ0aWR5dmVyc2UiKQ0KI2xpYnJhcnkoImx1YnJpZGF0ZSIpDQojbGlicmFyeSgia2FibGVFeHRyYSIpDQpgYGANCg0KIyBUb3RhbCBkZWF0aHMgR2VybWFueQ0KDQpgYGB7cn0NCiN0ZXN0X3BvcyA8LSByZWFkLmNzdigiZGF0YS9jc3YvcTFfMTExMS5jc3YiLCBoZWFkZXIgPSBUUlVFLCBzdHJpbmdzQXNGYWN0b3JzID0gRkFMU0UpDQp0b3RhbF9kZWF0aHMgPC0gcmVhZC50YWJsZShmaWxlID0gImRhdGEvdHN2L2RlbW9fbW1vbnRoLnRzdiIsIHNlcCA9ICJcdCIsIGhlYWRlciA9IFRSVUUpDQpzdGVyYmVmYWVsbGVfREUgPC0gcmVhZC50YWJsZShmaWxlID0gImRhdGEvc3RlcmJlZmFlbGxlX0RFLnhsc3giLCBoZWFkZXIgPSBUUlVFKQ0Kc3RlcmJlZmFlbGxlX0RFXzIwMjBfdGFnZSA8LSByZWFkLnRhYmxlKGZpbGUgPSAiZGF0YS9zdGVyYmVmYWVsbGVfMjAyMF9ERS54bHN4IiwgaGVhZGVyID0gVFJVRSkNCg0KDQpgYGANCg0KYGBge3J9DQp0b3RhbF9kZWF0aHNfREUgPC0gdG90YWxfZGVhdGhzICU+JSANCiAgZmlsdGVyKGdyZXBsKCJERSIsIHVuaXQubW9udGguZ2VvLnRpbWUsIGZpeGVkID0gVFJVRSkpDQpgYGANCg0KDQoNCg0KDQoNCg0KDQoNCg0K</div>
 
 
 
