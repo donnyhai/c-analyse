@@ -31,3 +31,8 @@ library("tidyverse")
 test_pos <- read.csv("data/csv/q1_1111.csv", header = TRUE, stringsAsFactors = FALSE)
 ```
 
+pcr herstelleung: siemens, qiagen, roche
+
+spez = 99.8% (diagnostics) (richtig positiv/falsch positiv)
+
+spezifität / sensitivität PCR Test
